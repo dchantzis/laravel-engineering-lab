@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+set -e
+cd /var/www
+if [[ ! -f artisan ]]; then
+  echo "No Laravel application installed yet; starting infrastructure only."
+  exit 0
+fi
+if [[ ! -f .env && -f .env.example ]]; then
+  echo "Laravel .env missing; copy application/.env.example to application/.env when ready."
+fi
+# Deliberately do not run Composer, npm, key generation, or migrations on startup.

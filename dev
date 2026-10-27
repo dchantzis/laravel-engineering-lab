@@ -1,0 +1,353 @@
+#!/usr/bin/env bash
+
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+cd -- "$SCRIPT_DIR" || exit 1
+
+# INSTRUCTIONS: MAKE THIS FILE EXECUTABLE TO USE: chmod +x ./dev
+
+### Set environment variables for dev or CLI.
+## Values in .env are loaded first; defaults below are only used when missing.
+
+if [ ! -f .env ]; then
+  echo "Missing .env file."
+  echo "Create one with: cp .env.example .env"
+  echo "Then edit .env for this project before running ./dev."
+  exit 1
+fi
+
+set -a
+. "$SCRIPT_DIR/.env"
+set +a
+
+export APP_ENV=${APP_ENV:-local}
+export APP_PORT=${APP_PORT:-8091}
+export APP_CONTAINER_PORT=${APP_CONTAINER_PORT:-80}
+export APP_INDEX_DIRECTORY=${APP_INDEX_DIRECTORY:-public}
+export APP_IMAGE=${APP_IMAGE:-laravel-engineering-lab:local}
+export COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME:-laravel-engineering-lab}
+export NETWORK_NAME=${NETWORK_NAME:-laravel-engineering-lab_app-net}
+export DB_VOLUME_NAME=${DB_VOLUME_NAME:-laravel-engineering-lab_dbdata}
+export REDIS_VOLUME_NAME=${REDIS_VOLUME_NAME:-laravel-engineering-lab_cachedata}
+export REDIS_PORT=${REDIS_PORT:-6390}
+export REDIS_CONTAINER_PORT=${REDIS_CONTAINER_PORT:-6379}
+export DB_PORT=${DB_PORT:-33090}
+export DB_CONTAINER_PORT=${DB_CONTAINER_PORT:-3306}
+export DB_ROOT_PASSWORD=${DB_ROOT_PASSWORD:-root-local-password}
+export DB_USER=${DB_USER:-laravel}
+export DB_PASSWORD=${DB_PASSWORD:-laravel-local-password}
+export DB_DATABASE=${DB_DATABASE:-laravel_engineering_lab}
+export XDEBUG_MODE=${XDEBUG_MODE:-off}
+
+# Get host IP (macOS uses ipconfig, Linux uses hostname -I).
+if [ -z "${XDEBUG_HOST:-}" ]; then
+    if [[ "$(uname)" == "Darwin" ]]; then
+        HOST_IP=$(ipconfig getifaddr en0 2>/dev/null || echo "127.0.0.1")
+    else
+        HOST_IP=$(hostname -I 2>/dev/null | awk '{print $1}')
+    fi
+    export XDEBUG_HOST=${HOST_IP:-127.0.0.1}
+fi
+
+export APP_HOST=${APP_HOST:-127.0.0.1}
+
+COMPOSE="docker compose"
+
+show_help() {
+  cat <<'HELP'
+Usage:
+  ./dev [command] [arguments]
+
+Application:
+  build [args]             Build Compose services
+  start|up [args]          Start services in the background
+  stop|down [args]         Stop services (preserve volumes)
+  restart [args]           Restart services
+  logs [args]              Follow application logs (or specified services)
+  ps|status [args]         Show service status
+  app                      Open a shell in the app container
+  app ip                   Show the application host and port
+  ssh                      Open a shell in the app container
+  bash [args]              Run Bash in the app container
+  run <service> [command]  Run a new one-off container
+
+Laravel and assets:
+  artisan|art [args]       Run an Artisan command
+  composer|comp [args]     Run Composer
+  npm [args]               Run npm
+  assets build [args]      Build frontend assets
+  assets dev [args]        Start frontend development server
+  build-assets [args]      Build frontend assets
+  bootstrap                Run local application setup helper (if installed)
+  test|t [args]            Run Laravel tests using SQLite in memory
+  test-mysql [args]        Run Laravel tests with configured test environment
+
+Services:
+  db                       Open a shell in the database container
+  db cli                   Open MySQL CLI (configured DB user)
+  db create                Create the configured database if missing
+  db migrate [args]        Run Laravel migrations
+  redis [args]             Open redis-cli (or execute redis-cli command)
+  php [args]               Execute PHP CLI
+  php-fpm [action]         Inspect/control Supervisor-managed PHP-FPM
+  nginx [action]           Inspect/control Supervisor-managed Nginx
+  ping [args]              Ping the app service from within the container
+  curl [args]              Request the app service from within the container
+  xdebug [option]          Inspect Xdebug configuration
+
+Docker:
+  images                   List Docker images
+  containers               List running containers
+  networks                 List Docker networks
+  volumes [size]           List volumes or disk usage
+  config                   Show resolved Compose configuration
+  check                    Validate Compose configuration
+  purge                    Remove project containers and volumes (confirmation)
+  purge-images             Remove project containers, volumes, local images
+
+Other:
+  help|-h|--help           Show this help
+
+With no command, the current Compose service status is shown.
+Unknown commands are passed through to docker compose.
+HELP
+}
+
+# Execute a command in the existing application container.
+app_exec() {
+  $COMPOSE exec app "$@"
+}
+
+# Supervisor owns both services; don't invoke 'service ... restart' behind it.
+managed_service() {
+  local service="$1"
+  shift
+  local action="${1:-status}"
+  if [ "$#" -gt 0 ]; then shift; fi
+  case "$action" in
+    status|start|stop|restart)
+      app_exec supervisorctl "$action" "$service" "$@"
+      ;;
+    *)
+      echo "Unknown $service action: $action (use status, start, stop, restart)" >&2
+      return 2
+      ;;
+  esac
+}
+
+## DEFINE CASES FOR COMMAND PARAMETERS:
+
+if [ "$#" -gt 0 ]; then
+
+  if [ "$1" == "help" ] || [ "$1" == "-h" ] || [ "$1" == "--help" ]; then
+      show_help
+
+  elif [ "$1" == "build" ]; then
+      shift 1
+      $COMPOSE build "$@"
+
+  elif [ "$1" == "start" ] || [ "$1" == "up" ]; then
+      shift 1
+      $COMPOSE up -d "$@"
+
+  elif [ "$1" == "stop" ] || [ "$1" == "down" ]; then
+      shift 1
+      $COMPOSE down "$@"
+
+  elif [ "$1" == "restart" ]; then
+      shift 1
+      $COMPOSE restart "$@"
+
+  elif [ "$1" == "ps" ] || [ "$1" == "status" ]; then
+      shift 1
+      $COMPOSE ps "$@"
+
+  elif [ "$1" == "logs" ]; then
+      shift 1
+      if [ "$#" -eq 0 ]; then
+        $COMPOSE logs -f app
+      else
+        $COMPOSE logs -f "$@"
+      fi
+
+  elif [ "$1" == "run" ]; then
+      shift 1
+      $COMPOSE run --rm -w /var/www "$@"
+
+  # Laravel commands operate in /var/www, the bind-mounted application/ directory.
+  elif [ "$1" == "artisan" ] || [ "$1" == "art" ]; then
+      shift 1
+      app_exec php artisan "$@"
+
+  elif [ "$1" == "composer" ] || [ "$1" == "comp" ]; then
+      shift 1
+      app_exec composer "$@"
+
+  elif [ "$1" == "npm" ]; then
+      shift 1
+      app_exec npm "$@"
+
+  elif [ "$1" == "assets" ]; then
+      shift 1
+      subcommand="${1:-build}"
+      if [ "$#" -gt 0 ]; then shift 1; fi
+      app_exec npm run "$subcommand" "$@"
+
+  elif [ "$1" == "build-assets" ]; then
+      shift 1
+      app_exec npm run build "$@"
+
+  elif [ "$1" == "bootstrap" ]; then
+      shift 1
+      # Current helper is deliberately non-destructive and doesn't install Laravel.
+      $COMPOSE exec -e FORCE_BOOTSTRAP=1 app bash /usr/local/bin/start-container-local "$@"
+
+  elif [ "$1" == "test" ] || [ "$1" == "t" ]; then
+      shift 1
+      $COMPOSE exec -e DB_CONNECTION=sqlite -e DB_DATABASE=:memory: app php artisan test "$@"
+
+  elif [ "$1" == "test-mysql" ]; then
+      shift 1
+      app_exec php artisan test "$@"
+
+  elif [ "$1" == "ssh" ]; then
+      shift 1
+      app_exec bash "$@"
+
+  elif [ "$1" == "app" ]; then
+      shift 1
+      if [ "${1:-}" == "ip" ]; then
+        printf '%s:%s\n' "$APP_HOST" "$APP_PORT"
+      else
+        app_exec bash "$@"
+      fi
+
+  elif [ "$1" == "db" ]; then
+      shift 1
+      if [ "${1:-}" == "create" ]; then
+        if [[ ! "$DB_DATABASE" =~ ^[a-zA-Z0-9_]+$ ]]; then
+          echo "Invalid database name: $DB_DATABASE" >&2
+          exit 1
+        fi
+        $COMPOSE exec -e MYSQL_PWD="$DB_ROOT_PASSWORD" database \
+          mysql -u root \
+          -e "CREATE DATABASE IF NOT EXISTS \`$DB_DATABASE\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
+      elif [ "${1:-}" == "migrate" ]; then
+        shift 1
+        app_exec php artisan migrate "$@"
+      elif [ "${1:-}" == "cli" ]; then
+        $COMPOSE exec database mysql -u "$DB_USER" -p "$DB_DATABASE"
+      else
+        $COMPOSE exec database bash
+      fi
+
+  elif [ "$1" == "redis" ]; then
+      shift 1
+      $COMPOSE exec redis redis-cli "$@"
+
+  elif [ "$1" == "php" ]; then
+      shift 1
+      app_exec php "$@"
+
+  elif [ "$1" == "php-fpm" ]; then
+      shift 1
+      managed_service php-fpm "$@"
+
+  elif [ "$1" == "nginx" ]; then
+      shift 1
+      case "${1:-}" in
+        status|start|stop|restart)
+          managed_service nginx "$@"
+          ;;
+        reload)
+          app_exec nginx -s reload
+          ;;
+        configtest)
+          app_exec nginx -t
+          ;;
+        *)
+          app_exec nginx "$@"
+          ;;
+      esac
+
+  elif [ "$1" == "images" ]; then
+      docker image ls -a
+      printf '\nRemove images with: docker image rm <IMAGE ID>\n'
+
+  elif [ "$1" == "containers" ]; then
+      docker container ls
+      printf '\nRemove containers with: docker container rm <CONTAINER ID>\n'
+
+  elif [ "$1" == "networks" ]; then
+      docker network ls
+      printf '\nRemove networks with: docker network rm <NETWORK ID>\n'
+
+  elif [ "$1" == "volumes" ]; then
+      shift 1
+      if [ "${1:-}" == "size" ]; then
+          docker system df -v
+      else
+          docker volume ls
+      fi
+      printf '\nRemove volumes with: docker volume rm <VOLUME ID>\n'
+
+  elif [ "$1" == "check" ]; then
+      $COMPOSE config --quiet
+
+  elif [ "$1" == "config" ]; then
+      $COMPOSE config
+
+  elif [ "$1" == "purge" ]; then
+      echo 'WARNING: this deletes the local MySQL and Redis volumes.'
+      read -r -p 'Type DELETE to proceed: ' answer
+      if [ "$answer" == "DELETE" ]; then
+        $COMPOSE down --volumes --remove-orphans
+      else
+        echo 'Cancelled.'
+      fi
+
+  elif [ "$1" == "purge-images" ]; then
+      shift 1
+      echo 'WARNING: this deletes project volumes and locally built project images.'
+      read -r -p 'Type DELETE to proceed: ' answer
+      if [ "$answer" == "DELETE" ]; then
+        $COMPOSE down --volumes --remove-orphans --rmi local "$@"
+      else
+        echo 'Cancelled.'
+      fi
+
+  elif [ "$1" == "xdebug" ]; then
+      shift 1
+      case "${1:-}" in
+        remote_host|client_host)
+          app_exec php --ri xdebug | grep -i client_host
+          ;;
+        remote_enable|mode)
+          app_exec php --ri xdebug | grep -i 'xdebug.mode\|mode =>'
+          ;;
+        status)
+          app_exec php --ri xdebug
+          ;;
+        *)
+          app_exec cat /etc/php/8.5/mods-available/xdebug.ini
+          ;;
+      esac
+
+  elif [ "$1" == "bash" ]; then
+      shift 1
+      app_exec bash "$@"
+
+  elif [ "$1" == "ping" ]; then
+      shift 1
+      app_exec ping app "$@"
+
+  elif [ "$1" == "curl" ]; then
+      shift 1
+      app_exec curl -v http://app "$@"
+
+  # Else, pass through arguments to Docker Compose.
+  else
+      $COMPOSE "$@"
+  fi
+else
+  $COMPOSE ps
+fi

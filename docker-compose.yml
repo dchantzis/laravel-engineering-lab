@@ -1,0 +1,60 @@
+name: ${COMPOSE_PROJECT_NAME:-laravel-engineering-lab}
+services:
+  app:
+    build:
+      context: .
+      dockerfile: docker-configuration/Dockerfile
+    image: ${APP_IMAGE:-laravel-engineering-lab:local}
+    working_dir: /var/www
+    environment:
+      XDEBUG_MODE: ${XDEBUG_MODE:-off}
+      XDEBUG_CONFIG: client_host=host.docker.internal
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "127.0.0.1:${APP_PORT:-8090}:80"
+    volumes:
+      - ./application:/var/www
+    depends_on:
+      database:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks: [app-net]
+  database:
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: ${DB_DATABASE:-laravel_engineering_lab}
+      MYSQL_USER: ${DB_USER:-laravel}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-laravel-local-password}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-root-local-password}
+    ports:
+      - "127.0.0.1:${DB_PORT:-33090}:3306"
+    volumes:
+      - dbdata:/var/lib/mysql
+      - ./docker-configuration/mysql/my.cnf:/etc/mysql/conf.d/laravel.cnf:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u root -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+    networks: [app-net]
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "127.0.0.1:${REDIS_PORT:-6390}:6379"
+    volumes:
+      - cachedata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks: [app-net]
+networks:
+  app-net:
+volumes:
+  dbdata:
+  cachedata:

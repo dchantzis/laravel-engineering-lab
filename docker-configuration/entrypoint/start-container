@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+set -e
+# The infrastructure starts even if /var/www contains no Laravel application.
+/usr/local/bin/start-container-local
+exec /usr/bin/supervisord -n -c /etc/supervisor/conf.d/supervisord.conf
