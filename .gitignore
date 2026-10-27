@@ -1,5 +1,4 @@
 .env
-application/*
 !application/.gitkeep
 *.log
 .idea
