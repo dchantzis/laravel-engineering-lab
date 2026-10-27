@@ -117,6 +117,14 @@ app_exec() {
   $COMPOSE exec app "$@"
 }
 
+app_exec_as_user() {
+  $COMPOSE exec \
+    --user "$(id -u):$(id -g)" \
+    -e HOME=/tmp \
+    -e COMPOSER_HOME="/tmp/composer-$(id -u)" \
+    app "$@"
+}
+
 # Supervisor owns both services; don't invoke 'service ... restart' behind it.
 managed_service() {
   local service="$1"
@@ -180,7 +188,7 @@ if [ "$#" -gt 0 ]; then
 
   elif [ "$1" == "composer" ] || [ "$1" == "comp" ]; then
       shift 1
-      app_exec composer "$@"
+      app_exec_as_user composer "$@"
 
   elif [ "$1" == "npm" ]; then
       shift 1

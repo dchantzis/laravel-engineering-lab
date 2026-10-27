@@ -30,5 +30,26 @@ RUN chmod +x /usr/local/bin/start-container /usr/local/bin/start-container-local
     && ln -s /etc/nginx/sites-available/default /etc/nginx/sites-enabled/default \
     && ln -sf /dev/stdout /var/log/nginx/access.log \
     && ln -sf /dev/stderr /var/log/nginx/error.log
+# Match PHP-FPM's filesystem identity to the host development user.
+ARG HOST_UID=1000
+ARG HOST_GID=1000
+RUN set -eux; \
+    if getent group "${HOST_GID}" >/dev/null; then \
+        DEV_GROUP="$(getent group "${HOST_GID}" | cut -d: -f1)"; \
+    else \
+        DEV_GROUP=laraveldev; \
+        groupadd -g "${HOST_GID}" "${DEV_GROUP}"; \
+    fi; \
+    if getent passwd "${HOST_UID}" >/dev/null; then \
+        DEV_USER="$(getent passwd "${HOST_UID}" | cut -d: -f1)"; \
+    else \
+        DEV_USER=laraveldev; \
+        useradd -u "${HOST_UID}" -g "${HOST_GID}" \
+            -M -s /usr/sbin/nologin "${DEV_USER}"; \
+    fi; \
+    sed -i \
+        -e "s/^user = .*/user = ${DEV_USER}/" \
+        -e "s/^group = .*/group = ${DEV_GROUP}/" \
+        /etc/php/8.5/fpm/pool.d/www.conf
 EXPOSE 80
 ENTRYPOINT ["/usr/local/bin/start-container"]
