@@ -219,7 +219,7 @@ if [ "$#" -gt 0 ]; then
 
   elif [ "$1" == "ssh" ]; then
       shift 1
-      app_exec bash "$@"
+      app_exec_as_user bash "$@"
 
   elif [ "$1" == "app" ]; then
       shift 1
