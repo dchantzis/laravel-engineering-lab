@@ -184,7 +184,7 @@ if [ "$#" -gt 0 ]; then
   # Laravel commands operate in /var/www, the bind-mounted application/ directory.
   elif [ "$1" == "artisan" ] || [ "$1" == "art" ]; then
       shift 1
-      app_exec php artisan "$@"
+      app_exec_as_user php artisan "$@"
 
   elif [ "$1" == "composer" ] || [ "$1" == "comp" ]; then
       shift 1
@@ -192,7 +192,7 @@ if [ "$#" -gt 0 ]; then
 
   elif [ "$1" == "npm" ]; then
       shift 1
-      app_exec npm "$@"
+      app_exec_as_user npm "$@"
 
   elif [ "$1" == "assets" ]; then
       shift 1
