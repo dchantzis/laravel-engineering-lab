@@ -88,7 +88,7 @@ return [
             'tap' => [
                 ApplySensitiveDataProcessor::class,
             ],
-            'path' => storage_path('logs/laravel.log'),
+            'path' => env('APP_LOG_PATH') ?: storage_path('logs/laravel.log'),
             'level' => env('LOG_LEVEL', 'debug'),
             'replace_placeholders' => true,
         ],
@@ -98,7 +98,7 @@ return [
             'tap' => [
                 ApplySensitiveDataProcessor::class,
             ],
-            'path' => storage_path('logs/laravel.log'),
+            'path' => env('APP_LOG_PATH') ?: storage_path('logs/laravel.log'),
             'level' => env('LOG_LEVEL', 'debug'),
             'max_files' => env('LOG_DAILY_DAYS', 14),
             'replace_placeholders' => true,
@@ -106,7 +106,7 @@ return [
 
         'monthly' => [
             'driver' => 'monthly',
-            'path' => storage_path('logs/laravel.log'),
+            'path' => env('APP_LOG_PATH') ?: storage_path('logs/laravel.log'),
             'level' => env('LOG_LEVEL', 'debug'),
             'max_files' => 3,
             'replace_placeholders' => true,
@@ -120,6 +120,16 @@ return [
             'level' => env('LOG_LEVEL', 'critical'),
             'replace_placeholders' => true,
         ],
+
+        'slack_scheduled_command' => [
+            'driver' => 'slack',
+            'url' => env('LOG_SLACK_SCHEDULED_COMMANDS_URL'),
+            'username' => env('LOG_SLACK_SCHEDULED_COMMANDS_USERNAME'),
+            'emoji' => ':information_source:',
+            'level' => env('LOG_LEVEL', 'info'),
+            'enabled' => env('LOG_SLACK_SCHEDULED_COMMANDS_ENABLED', false),
+        ],
+
 
         'papertrail' => [
             'driver' => 'monolog',
@@ -164,6 +174,15 @@ return [
 
         'emergency' => [
             'path' => storage_path('logs/laravel.log'),
+        ],
+
+        'teams' => [
+            'url' => env('LOG_TEAMS_WEBHOOK_URL'),
+        ],
+
+        'teams_scheduled_command' => [
+            'url' => env('LOG_TEAMS_SCHEDULED_COMMANDS_WEBHOOK_URL'),
+            'enabled' => env('LOG_TEAMS_SCHEDULED_COMMANDS_ENABLED', false),
         ],
 
     ],
