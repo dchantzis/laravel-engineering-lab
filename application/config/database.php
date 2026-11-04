@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\DatabaseConnection;
 use Illuminate\Support\Str;
 use Pdo\Mysql;
 
@@ -17,7 +18,7 @@ return [
     |
     */
 
-    'default' => env('DB_CONNECTION', 'sqlite'),
+    'default' => env('DB_CONNECTION', DatabaseConnection::APPLICATION),
 
     /*
     |--------------------------------------------------------------------------
@@ -44,14 +45,29 @@ return [
             'transaction_mode' => 'DEFERRED',
         ],
 
-        'mysql' => [
+        DatabaseConnection::APPLICATION => [
             'driver' => 'mysql',
             'url' => env('DB_URL'),
             'host' => env('DB_HOST', '127.0.0.1'),
             'port' => env('DB_PORT', '3306'),
-            'database' => env('DB_DATABASE', 'laravel'),
-            'username' => env('DB_USERNAME', 'root'),
-            'password' => env('DB_PASSWORD', ''),
+            'read' => [
+                'host' => [
+                    env('DB_HOST_READ', '127.0.0.1'),
+                ],
+                'port' => env('DB_PORT_READ', '3306'),
+                'database' => env('DB_DATABASE_READ'),
+                'username' => env('DB_USERNAME_READ'),
+                'password' => env('DB_PASSWORD_READ'),
+            ],
+            'write' => [
+                'host' => [
+                    env('DB_HOST', '127.0.0.1'),
+                ],
+                'port' => env('DB_PORT', '3306'),
+                'database' => env('DB_DATABASE'),
+                'username' => env('DB_USERNAME'),
+                'password' => env('DB_PASSWORD'),
+            ],
             'unix_socket' => env('DB_SOCKET', ''),
             'charset' => env('DB_CHARSET', 'utf8mb4'),
             'collation' => env('DB_COLLATION', 'utf8mb4_unicode_ci'),
@@ -61,7 +77,13 @@ return [
             'engine' => null,
             'options' => extension_loaded('pdo_mysql') ? array_filter([
                 Mysql::ATTR_SSL_CA => env('MYSQL_ATTR_SSL_CA'),
-            ]) : [],
+                PDO::ATTR_EMULATE_PREPARES => false,
+                Mysql::ATTR_COMPRESS => true,
+                Mysql::ATTR_USE_BUFFERED_QUERY => true,
+            ], static fn ($value) => $value !== null && $value !== '') : [],
+            'timezone' => env('DB_TIMEZONE', 'UTC'),
+            'transaction_attempts' => env('DB_TRANSACTION_ATTEMPTS', 3),
+            'encryption_key' => env('APP_PRIVATE_KEY'),
         ],
 
         'mariadb' => [
