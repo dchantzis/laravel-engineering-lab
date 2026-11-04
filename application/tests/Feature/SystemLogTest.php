@@ -4,7 +4,9 @@ namespace Tests\Feature;
 
 use App\Enums\DatabaseConnection;
 use App\Handlers\LogDatabaseMonologHandler;
+use App\Http\Middleware\IpTrace;
 use App\Logging\SensitiveDataProcessor;
+use App\Models\ConsoleCommandLog;
 use App\Models\SystemLog;
 use App\Services\LogSystem;
 use Illuminate\Support\Facades\DB;
@@ -261,6 +263,62 @@ class SystemLogTest extends TestCase
         $this->assertStringNotContainsString($marker, $raw);
         $this->assertStringNotContainsString('reference', $raw);
         $this->assertStringNotContainsString('synthetic-password', $raw);
+    }
+
+    public function test_database_pipeline_resolves_ip_trace_from_request_attributes(): void
+    {
+        $trace = LogSystem::ipTrace()->add('127.0.0.1', 'GET', '/system-log-test', [], [], [], 'localhost');
+        request()->attributes->set(IpTrace::IP_TRACE_ID_SLUG, $trace->id);
+
+        Log::channel('database')->info('Correlated log');
+
+        $stored = SystemLog::query()->sole();
+        $this->assertSame($trace->id, $stored->ip_trace_id);
+        $this->assertNull($stored->console_command_log_id);
+    }
+
+    public function test_explicit_service_correlation_overrides_request_ip_and_preserves_console_identifier(): void
+    {
+        $automatic = LogSystem::ipTrace()->add('127.0.0.1', 'GET', '/automatic', [], [], [], 'localhost');
+        $explicit = LogSystem::ipTrace()->add('127.0.0.2', 'GET', '/explicit', [], [], [], 'localhost');
+        // This is only a related fixture; console-command logging behavior is outside this suite.
+        $command = ConsoleCommandLog::create(['name' => 'test:fixture', 'meta' => []]);
+        request()->attributes->set(IpTrace::IP_TRACE_ID_SLUG, $automatic->id);
+
+        $stored = LogSystem::system()->add('Explicit correlation', Level::Notice, ['job' => 'test'], 'service-test', $command->id, $explicit->id);
+
+        $this->assertInstanceOf(SystemLog::class, $stored);
+        $this->assertModelExists($stored);
+        $stored = $stored->fresh();
+        $this->assertSame($explicit->id, $stored->ip_trace_id);
+        $this->assertSame($command->id, $stored->console_command_log_id);
+        $this->assertTrue($stored->consoleCommandLog->is($command));
+        $this->assertSame('notice', $stored->level_name);
+        $this->assertSame('test', $stored->context->job);
+    }
+
+    public function test_service_resolves_request_ip_when_explicit_identifier_is_omitted(): void
+    {
+        $trace = LogSystem::ipTrace()->add('127.0.0.1', 'GET', '/service-log-test', [], [], [], 'localhost');
+        request()->attributes->set(IpTrace::IP_TRACE_ID_SLUG, $trace->id);
+
+        $stored = LogSystem::system()->add('Service correlation', 200, [], 'service-test');
+
+        $this->assertInstanceOf(SystemLog::class, $stored);
+        $this->assertModelExists($stored);
+        $this->assertSame($trace->id, $stored->fresh()->ip_trace_id);
+        $this->assertSame('info', $stored->fresh()->level_name);
+    }
+
+    public function test_logging_succeeds_without_correlation_identifiers(): void
+    {
+        request()->attributes->remove(IpTrace::IP_TRACE_ID_SLUG);
+
+        Log::channel('database')->info('No correlation');
+
+        $stored = SystemLog::query()->sole();
+        $this->assertNull($stored->ip_trace_id);
+        $this->assertNull($stored->console_command_log_id);
     }
 
     public function test_database_channel_resolves_expected_handler_and_processors(): void
