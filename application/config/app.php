@@ -43,6 +43,8 @@ return [
 
     'debug' => (bool) env('APP_DEBUG', false),
 
+    'debug_queries' => (bool) env('APP_DEBUG_QUERIES', false),
+
     /*
     |--------------------------------------------------------------------------
     | Application URL
@@ -67,7 +69,7 @@ return [
     |
     */
 
-    'timezone' => 'UTC',
+    'timezone' => env('APP_TIMEZONE', 'UTC'),
 
     /*
     |--------------------------------------------------------------------------
@@ -100,6 +102,12 @@ return [
     'cipher' => 'AES-256-CBC',
 
     'key' => env('APP_KEY'),
+
+    'private_key' => env('APP_PRIVATE_KEY'),
+
+    'index_key' => env('APP_INDEX_KEY'),
+
+    'version' => env('APP_VERSION', null),
 
     'previous_keys' => [
         ...array_filter(
