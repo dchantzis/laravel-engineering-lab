@@ -1,5 +1,9 @@
 <?php
 
+use App\Handlers\LogDatabaseMonologHandler;
+use App\Logging\ApplySensitiveDataProcessor;
+use App\Services\LogDatabaseMonolog;
+use Monolog\Formatter\LineFormatter;
 use Monolog\Handler\NullHandler;
 use Monolog\Handler\StreamHandler;
 use Monolog\Handler\SyslogUdpHandler;
@@ -58,8 +62,32 @@ return [
             'ignore_exceptions' => false,
         ],
 
+        'fallback' => [
+            'driver' => 'stack',
+            'channels' => ['single', 'stderr'],
+            'ignore_exceptions' => true,
+        ],
+
+        'database' => [
+            'driver' => 'custom',
+            'tap' => [
+                ApplySensitiveDataProcessor::class,
+            ],
+            'handler' => LogDatabaseMonologHandler::class,
+            'via' => LogDatabaseMonolog::class,
+            'level' => env('LOG_LEVEL', 'debug'),
+            'formatter' => LineFormatter::class,
+            'formatter_with' => [
+                'format' => '%message%',
+                'includeStacktraces' => true,
+            ],
+        ],
+
         'single' => [
             'driver' => 'single',
+            'tap' => [
+                ApplySensitiveDataProcessor::class,
+            ],
             'path' => storage_path('logs/laravel.log'),
             'level' => env('LOG_LEVEL', 'debug'),
             'replace_placeholders' => true,
@@ -67,6 +95,9 @@ return [
 
         'daily' => [
             'driver' => 'daily',
+            'tap' => [
+                ApplySensitiveDataProcessor::class,
+            ],
             'path' => storage_path('logs/laravel.log'),
             'level' => env('LOG_LEVEL', 'debug'),
             'max_files' => env('LOG_DAILY_DAYS', 14),
