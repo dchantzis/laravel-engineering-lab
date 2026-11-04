@@ -7,7 +7,10 @@
     "license": "MIT",
     "require": {
         "php": "^8.3",
+        "ext-sodium": "*",
         "laravel/framework": "^13.17",
+        "laravel/passport": "^13.10",
+        "laravel/slack-notification-channel": "^3.10",
         "laravel/tinker": "^3.0"
     },
     "require-dev": {
