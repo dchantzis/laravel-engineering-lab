@@ -68,4 +68,9 @@ class SystemLogService extends LogService
             $consoleCommandLogId
         );
     }
+
+    public function deleteHealthcheckLogEntries(): int
+    {
+        return SystemLogRepository::deleteHealthcheckLogEntries();
+    }
 }

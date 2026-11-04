@@ -72,6 +72,153 @@ The Composer command runs inside the application container, whose working direct
 
 After installation, configure Laravel's `application/.env` for the container network. Use `database` as the MySQL host and `redis` as the Redis host; use their **container ports**, not the host-published ports. Then run the necessary application setup and migrations.
 
+## Authentication & OAuth2
+
+The application uses **Laravel Passport** for two distinct OAuth2 flows:
+
+| Consumer | OAuth2 grant | Identity | API middleware |
+| --- | --- | --- | --- |
+| External integration | Client Credentials | OAuth client (no user) | `CheckClientCredentials` |
+| Administrator | Authorization Code + PKCE | Authenticated `users` record | `auth:api`, `EnsureUserIsAdmin` |
+
+Both flows use the same Passport installation. Client Credentials tokens must not be used to authenticate administrator endpoints. The admin browser login uses Laravel's `web` session guard; Passport separately issues access tokens for API requests.
+
+### Install and initialize Passport
+
+From the repository root, after the application and its database are configured:
+
+```bash
+./dev composer require laravel/passport
+./dev artisan passport:install
+./dev db migrate
+```
+
+**Existing installations:** Do not rerun `passport:install` or regenerate Passport keys unnecessarily; doing so can invalidate existing tokens. A fresh clone with committed application code normally needs `./dev composer install`, the database migrations, and Passport signing keys generated for that environment. Check the current Passport version's installation commands before using these steps on an existing environment.
+
+The application uses the Passport `api` guard backed by the `users` provider. The `User` model must include `Laravel\Passport\HasApiTokens`. Browser sessions use the `web` guard. The administrator API checks `is_admin` through `AdminAuthorizationService` and `EnsureUserIsAdmin` middleware.
+
+### Configure token lifetimes
+
+Set the following in **`application/.env`** (not the repository-root Docker `.env`):
+
+```dotenv
+PASSPORT_TOKENS_EXPIRE_IN_HOURS=1
+PASSPORT_REFRESH_TOKENS_EXPIRE_IN_HOURS=24
+PASSPORT_PERSONAL_ACCESS_TOKENS_EXPIRE_IN_HOURS=24
+```
+
+`config/auth.php` reads these values under the `passport` key. `App\Providers\AuthServiceProvider` configures Passport with `tokensExpireIn`, `refreshTokensExpireIn`, and `personalAccessTokensExpireIn`; the provider is registered in `bootstrap/providers.php`.
+
+```bash
+./dev artisan config:clear
+```
+
+The one-hour access-token lifetime applies to both flows. Client Credentials tokens have **no refresh token**: integrations request a new access token using their client credentials. The new expiration settings apply to newly issued tokens only.
+
+### Create an integration OAuth2 client
+
+```bash
+./dev artisan passport:client --client
+```
+
+Follow the prompts, give the client a descriptive name, and securely save the generated **client ID and client secret**. Do not commit either secret-bearing configuration or issued tokens to Git.
+
+To request a machine-to-machine access token, replace the placeholders with the client credentials:
+
+```bash
+curl -sS -X POST http://127.0.0.1:8092/oauth/token \
+  -H 'Accept: application/json' \
+  -d 'grant_type=client_credentials' \
+  -d 'client_id=YOUR_INTEGRATION_CLIENT_ID' \
+  -d 'client_secret=YOUR_INTEGRATION_CLIENT_SECRET'
+```
+
+The response should include a `Bearer` access token and `expires_in: 3600` with the example configuration. Use it on an integration API endpoint with `Authorization: Bearer <access_token>`. Integration routes use the Client Credentials middleware, not `auth:api` (which expects a user).
+
+### Provision an administrator
+
+Use the project's interactive system-user command:
+
+```bash
+./dev artisan engineering:system-user
+```
+
+Select **Create**, enter the administrator's name and email, and enable administrator access when prompted. The command generates a password and displays it once; store it securely. The command also supports updating an existing user. The `is_admin` flag defaults to `false` and is not mass assignable.
+
+### Create an administrator OAuth2 client (PKCE)
+
+```bash
+./dev artisan passport:client --public
+```
+
+Use a descriptive name (for example, `Engineering Lab Admin`) and configure the callback URL for the admin frontend. During local testing, the callback used was:
+
+```text
+http://127.0.0.1:8092/admin/callback
+```
+
+This is a **public client**: it does not use a client secret. Record the generated client ID. The callback is a temporary testing target until a frontend implements it.
+
+### Browser login and authorization approval
+
+The application provides `GET /login`, `POST /login`, and `POST /logout` through `AuthenticationController`. `LoginRequest` validates credentials; `AuthenticationService` authenticates with the `web` guard and rejects non-admin users. Successful login regenerates the session.
+
+Passport's `/oauth/authorize` endpoint requires a configured authorization approval view. The project registers `Passport::authorizationView('auth.oauth-authorize')` and renders the approval form in `resources/views/auth/oauth-authorize.blade.php`.
+
+### Test Authorization Code + PKCE
+
+1. Generate a PKCE verifier and S256 challenge locally:
+
+   ```bash
+   php -r '
+   $verifier = rtrim(strtr(base64_encode(random_bytes(32)), "+/", "-_"), "=");
+   $challenge = rtrim(strtr(base64_encode(hash("sha256", $verifier, true)), "+/", "-_"), "=");
+   echo "Verifier: $verifier\nChallenge: $challenge\n";
+   '
+   ```
+
+2. Construct a browser authorization URL using your client ID, redirect URI, challenge, and a random `state` value:
+
+   ```text
+   http://127.0.0.1:8092/oauth/authorize?client_id=YOUR_ADMIN_CLIENT_ID&redirect_uri=URL_ENCODED_CALLBACK&response_type=code&scope=&state=RANDOM_STATE&code_challenge=YOUR_CHALLENGE&code_challenge_method=S256
+   ```
+
+3. Open the URL, log in as the administrator if prompted, and approve the application. Passport redirects to the registered callback with `code` and `state` query parameters. Verify that `state` matches the value you generated. The temporary callback may return 404; for manual testing, retrieve the `code` from the address bar. **The authorization code is not the PKCE challenge.**
+
+4. Exchange the one-time authorization code for tokens, using the **original verifier**:
+
+   ```bash
+   curl -sS -X POST http://127.0.0.1:8092/oauth/token \
+     -H 'Accept: application/json' \
+     -d 'grant_type=authorization_code' \
+     -d 'client_id=YOUR_ADMIN_CLIENT_ID' \
+     -d 'redirect_uri=http://127.0.0.1:8092/admin/callback' \
+     -d 'code=YOUR_AUTHORIZATION_CODE' \
+     -d 'code_verifier=YOUR_ORIGINAL_VERIFIER'
+   ```
+
+   Expect an access token, refresh token, and `expires_in: 3600` with the example configuration. Authorization codes expire quickly and are single-use.
+
+5. Test a protected admin endpoint (the `/api/admin/test` route is a temporary development route and may be removed):
+
+   ```bash
+   read -rsp 'Access token: ' ACCESS_TOKEN; echo
+   curl -i http://127.0.0.1:8092/api/admin/test \
+     -H 'Accept: application/json' \
+     -H "Authorization: Bearer $ACCESS_TOKEN"
+   unset ACCESS_TOKEN
+   ```
+
+   An authorized administrator receives HTTP 200. `auth:api` resolves the user from the Passport token; `EnsureUserIsAdmin` enforces administrator authorization.
+
+### Security and deployment notes
+
+- The `127.0.0.1:8092` address and callback are **local-development examples**; use the actual host, HTTPS, and registered redirect URI in other environments.
+- Never put tokens, client secrets, authorization codes, or PKCE verifiers into committed files, issue reports, or shared logs. Rotate credentials exposed outside a trusted local environment.
+- The approval view and login form are intentionally minimal development interfaces, not a finished production admin frontend.
+- Disable detailed exception traces and debug output in production; review request/audit logging for credential redaction.
+- Administrator access-token lifetime is currently configured globally alongside integration access-token lifetime. Revisit lifetimes and client-specific policies before production use.
+
 ## Development commands
 
 The `./dev` helper is the main interface for local development. Run `./dev help` for the complete command list.
@@ -138,4 +285,4 @@ As implementations are added, their architecture, tests, and documentation shoul
 
 ## Status
 
-**Infrastructure configured and validated.** Application features and architectural examples will be added incrementally.
+**Infrastructure configured and validated.** Laravel Passport Client Credentials and administrator Authorization Code + PKCE flows have been implemented and manually verified. Additional engineering features, automated tests, and documentation are being developed incrementally.

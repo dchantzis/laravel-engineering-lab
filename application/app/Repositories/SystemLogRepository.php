@@ -4,6 +4,7 @@ namespace App\Repositories;
 
 use App\Http\Middleware\IpTrace;
 use App\Models\SystemLog;
+use App\Services\HealthCheckService;
 use App\Traits\FilterableByDateDuration;
 use Carbon\Carbon;
 use DateTimeInterface;
@@ -113,5 +114,12 @@ class SystemLogRepository
             'context' => jsonEncode($context),
             'channel' => $channel,
         ]);
+    }
+
+    public static function deleteHealthcheckLogEntries(): int
+    {
+        return SystemLog::where('message', HealthCheckService::HEALTH_CHECK_FILE_LOG_MESSAGE)
+            ->orWhere('message', HealthCheckService::HEALTH_CHECK_DATABASE_LOG_MESSAGE)
+            ->delete();
     }
 }

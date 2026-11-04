@@ -42,6 +42,11 @@ return [
             'driver' => 'session',
             'provider' => 'users',
         ],
+
+        'api' => [
+            'driver' => 'passport',
+            'provider' => 'users',
+        ],
     ],
 
     /*
@@ -114,4 +119,9 @@ return [
 
     'password_timeout' => env('AUTH_PASSWORD_TIMEOUT', 10800),
 
+    'passport' => [
+        'tokens_expire_in_hours' => (int) env('PASSPORT_TOKENS_EXPIRE_IN_HOURS', 1),
+        'refresh_tokens_expire_in_hours' => (int) env('PASSPORT_REFRESH_TOKENS_EXPIRE_IN_HOURS', 24),
+        'personal_tokens_expire_in_hours' => (int) env('PASSPORT_PERSONAL_ACCESS_TOKENS_EXPIRE_IN_HOURS', 24),
+    ],
 ];

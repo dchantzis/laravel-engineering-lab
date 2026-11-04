@@ -6,6 +6,7 @@ use Illuminate\Support\ServiceProvider;
 use App\Events\LogMonologEvent;
 use App\Listeners\LogMonologEventListener;
 use Illuminate\Support\Facades\Event;
+use Laravel\Passport\Passport;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -22,6 +23,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        Passport::authorizationView('auth.oauth-authorize');
 
         Event::listen(
             LogMonologEvent::class,
