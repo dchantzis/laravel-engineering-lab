@@ -2,6 +2,7 @@
 
 namespace App\Repositories;
 
+use App\Http\Middleware\IpTrace;
 use App\Models\SystemLog;
 use App\Traits\FilterableByDateDuration;
 use Carbon\Carbon;
@@ -95,7 +96,7 @@ class SystemLogRepository
         ?int $ipTraceId = null
     ): ?SystemLog {
         $ipTraceId = $ipTraceId
-            ?? request()->attributes->get('ip_trace_id');
+            ?? request()->attributes->get(IpTrace::IP_TRACE_ID_SLUG);
 
         $context = (! empty($context)) ? $context : [];
 

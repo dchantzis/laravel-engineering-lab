@@ -2,6 +2,7 @@
 
 namespace App\Listeners;
 
+use App\Http\Middleware\IpTrace;
 use App\Services\DatabaseLogServices\SystemLogService;
 use App\Services\LogSystem;
 
@@ -25,7 +26,7 @@ class LogMonologEventListener
             context: $events->record['context'],
             channel: $events->record['channel'],
             consoleCommandLogId: null,
-            ipTraceId: (request()) ? request()->attributes->get('ip_trace_id') : null,
+            ipTraceId: (request()) ? request()->attributes->get(IpTrace::IP_TRACE_ID_SLUG) : null,
         );
     }
 }
