@@ -8,7 +8,10 @@ class SensitiveDataProcessor
 {
     public function __invoke(LogRecord $record): LogRecord
     {
-        if (! config('engineering.system_logs.sanitize_sensitive_data', true)) {
+        if (
+            ! isEnvironmentProduction()
+            && ! config('engineering.sensitive_data.enabled', true)
+        ) {
             return $record;
         }
 

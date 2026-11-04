@@ -14,6 +14,13 @@ return [
     ],
 
     'sensitive_data' => [
+        'enabled' => (bool) env('SANITIZE_SENSITIVE_DATA', true),
+
+        'sanitize_api_debug_information' => (bool) env(
+            'SANITIZE_API_DEBUG_INFORMATION',
+            true
+        ),
+
         'fields' => [
             'password',
             'password_confirmation',
@@ -27,14 +34,6 @@ return [
         ],
     ],
 
-    'system_logs' => [
-        'sanitize_sensitive_data' => env(
-            'SYSTEM_LOGS_SANITIZE_SENSITIVE_DATA',
-            true
-        ),
-    ],
-
-    'sanitise_sensitive_data_in_admin_responses' => (bool) env('SANITIZE_SENSITIVE_DATA_IN_ADMIN_RESPONSES', false),
     'console_command_execution_heartbeat_interval_seconds' => (int) env('CONSOLE_COMMAND_EXECUTION_HEARTBEAT_INTERVAL_SECONDS', 30),
     'scheduler_commands_scan_orphan_threshold_minutes' => (int) env('SCHEDULER_COMMANDS_SCAN_ORPHAN_THRESHOLD_MINUTES', 5),
     'console_scheduled_command_quiet_run_enabled' => env('APP_SCHEDULED_COMMAND_QUIET_RUN_ENABLED', false),

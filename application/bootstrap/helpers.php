@@ -13,6 +13,7 @@ use Lcobucci\JWT\Encoding\JoseEncoder;
 use Laravel\Passport\Passport;
 use Ramsey\Uuid\UuidInterface;
 use Illuminate\Support\Stringable;
+use App\Services\Security\SensitiveDataSanitizer;
 
 if (! function_exists('formatBytes')) {
     function formatBytes(int $bytes, int $precision = 3, bool $toHuman = false): string
@@ -400,38 +401,25 @@ if (! function_exists('sanitizeSensitiveData')) {
         string|array $value,
         array $ignoredFields
     ): string|array {
+        $sanitizer = app(
+            SensitiveDataSanitizer::class
+        );
+
+        // Preserve the existing helper's support for URL-encoded bodies.
         if (is_string($value)) {
             $decoded = json_decode($value, true);
 
             if (json_last_error() !== JSON_ERROR_NONE || ! is_array($decoded)) {
-                if (! str_contains($value, '=')) {
-                    return $value;
+                if (str_contains($value, '=')) {
+                    return $sanitizer->sanitizeFormData(
+                        $value,
+                        $ignoredFields
+                    );
                 }
-
-                parse_str($value, $parsed);
-
-                if (empty($parsed)) {
-                    return $value;
-                }
-
-                $value = $parsed;
-            } else {
-                $value = $decoded;
-            }
-
-        }
-
-        $ignoredFields = array_map('strtolower', $ignoredFields);
-
-        foreach ($value as $key => $item) {
-            if (in_array(strtolower((string) $key), $ignoredFields, true)) {
-                $value[$key] = '********';
-            } elseif (is_array($item)) {
-                $value[$key] = sanitizeSensitiveData($item, $ignoredFields);
             }
         }
 
-        return $value;
+        return $sanitizer->sanitize($value, $ignoredFields);
     }
 }
 

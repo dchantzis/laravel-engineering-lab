@@ -101,7 +101,10 @@ class SystemLogRepository
 
         $context = (! empty($context)) ? $context : [];
 
-        if (config('engineering.system_logs.sanitize_sensitive_data', true)) {
+        if (
+            isEnvironmentProduction()
+            || config('engineering.sensitive_data.enabled', true)
+        ) {
             $context = sanitizeSensitiveData($context, config('engineering.sensitive_data.fields', []));
         }
 

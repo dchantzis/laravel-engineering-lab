@@ -149,14 +149,14 @@ class ApiResponse
     protected function makeDebugInformation(Exception|Error|null $exception = null): array
     {
         $requestUri = request()->route() ? request()->route()->uri() : null;
-        $sanitiseSensitiveDataInAdminResponses = isEnvironmentProduction()
-            || config('engineering.sanitise_sensitive_data_in_admin_responses', true);
+        $sanitizeApiDebugInformation = isEnvironmentProduction()
+            || config('engineering.sensitive_data.sanitize_api_debug_information', true);
 
         $debugInformation = [
             'uri' => request()->path(),
             'request_uri' => $requestUri,
             'request_body' =>
-                $sanitiseSensitiveDataInAdminResponses
+                $sanitizeApiDebugInformation
                     ? sanitizeSensitiveData(
                         request()->all(),
                         config('engineering.sensitive_data.fields', []))
@@ -193,7 +193,7 @@ class ApiResponse
             foreach (DatabaseConnection::values() as $connectionName) {
                 foreach (DB::connection($connectionName)->getQueryLog() as $log) {
                     $debugInformation['queries'][$connectionName][] = [
-                        'query' => $sanitiseSensitiveDataInAdminResponses
+                        'query' => $sanitizeApiDebugInformation
                             ? $log['query']
                             : constructQueryWithBindings($log['query'], $log['bindings']),
                         'time' => sprintf('%sms', $log['time']),
@@ -203,7 +203,7 @@ class ApiResponse
 
             if ($exception instanceof QueryException) {
                 $debugInformation['queries'][$exception->getConnectionName()][] = [
-                    'query' => $sanitiseSensitiveDataInAdminResponses
+                    'query' => $sanitizeApiDebugInformation
                         ? $exception->getSql()
                         : constructQueryWithBindings($exception->getSql(), $exception->getBindings()),
                     'time' => '',
