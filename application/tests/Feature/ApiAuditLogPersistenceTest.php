@@ -126,16 +126,16 @@ class ApiAuditLogPersistenceTest extends TestCase
         $sentinel = 'test-secret-marker-'.Str::uuid();
 
         $result = LogSystem::api()->add(
-            content: ['secret' => $sentinel],
+            content: ['reference' => $sentinel],
             requestUuid: (string) Str::uuid(),
             type: ApiAuditLogType::REQUEST,
-            meta: ['secret' => $sentinel],
+            meta: ['reference' => $sentinel],
         );
 
         $this->assertInstanceOf(ApiAuditLog::class, $result);
         $stored = $result->fresh();
-        $this->assertSame($sentinel, $stored->content->secret);
-        $this->assertSame($sentinel, $stored->meta->secret);
+        $this->assertSame($sentinel, $stored->content->reference);
+        $this->assertSame($sentinel, $stored->meta->reference);
         $raw = DB::connection(DatabaseConnection::APPLICATION)->table('api_audit_logs')->find($result->id);
         $this->assertNotNull($raw);
         foreach (['content', 'meta'] as $column) {
@@ -144,5 +144,50 @@ class ApiAuditLogPersistenceTest extends TestCase
             $this->assertStringNotContainsString($sentinel, $raw->{$column});
             $this->assertStringNotContainsString('secret', $raw->{$column});
         }
+    }
+
+    public function test_sensitive_data_is_sanitized_before_persistence(): void
+    {
+        $auditLog = LogSystem::api()->add(
+            content: [
+                'username' => 'john',
+                'password' => 'secret123',
+                'nested' => [
+                    'access_token' => 'token123',
+                ],
+            ],
+            requestUuid: (string) Str::uuid(),
+            type: ApiAuditLogType::REQUEST,
+            meta: [
+                'headers' => [
+                    'Authorization' => 'Bearer secret-token',
+                    'X-API-Key' => 'api-secret',
+                ],
+            ],
+            resource: '/api/test?token=secret123&marker=visible',
+        );
+
+        $this->assertInstanceOf(ApiAuditLog::class, $auditLog);
+
+        $stored = $auditLog->fresh();
+
+        $this->assertSame('john', $stored->content->username);
+        $this->assertSame('********', $stored->content->password);
+        $this->assertSame('********', $stored->content->nested->access_token);
+
+        $this->assertSame(
+            '********',
+            $stored->meta->headers->Authorization
+        );
+
+        $this->assertSame(
+            '********',
+            $stored->meta->headers->{'X-API-Key'}
+        );
+
+        $this->assertSame(
+            '/api/test?token=%2A%2A%2A%2A%2A%2A%2A%2A&marker=visible',
+            $stored->resource
+        );
     }
 }

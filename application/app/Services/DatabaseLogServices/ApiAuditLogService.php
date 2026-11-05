@@ -11,6 +11,7 @@ use Illuminate\Pagination\LengthAwarePaginator;
 use Ramsey\Uuid\UuidInterface;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Support\Collection;
+use App\Services\Security\SensitiveDataSanitizer;
 
 class ApiAuditLogService extends LogService
 {
@@ -33,6 +34,14 @@ class ApiAuditLogService extends LogService
         if (! config('engineering.api_audit_logs_enabled')) {
             return null;
         }
+
+        $sanitizer = app(SensitiveDataSanitizer::class);
+
+        $content = $sanitizer->sanitizeContent($content);
+        $meta = $sanitizer->sanitize($meta);
+        $resource = $resource !== null
+            ? $sanitizer->sanitizeUrl($resource)
+            : null;
 
         return ApiAuditLogRepository::store(
             content: $content,

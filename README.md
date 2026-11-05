@@ -31,6 +31,42 @@ The local development environment includes:
 
 > The infrastructure can run before Laravel is installed. The `application/` directory contains the Laravel source once the application has been created.
 
+## Implemented features
+
+The lab contains working, tested implementations rather than only architectural examples:
+
+| Area | Implementation |
+| --- | --- |
+| OAuth2 authentication | Laravel Passport Client Credentials for integrations; Authorization Code + PKCE for administrator access, with separate authorization middleware. |
+| API audit logging | Correlated request/response records, including asynchronous response handling; sensitive content is sanitized before persistence and audit content/metadata are encrypted at rest. |
+| HTTP request tracing | Opt-in `ip_trace` middleware and persistence, including request-body handling and sensitive-field redaction. |
+| System logging | Database-backed structured logs, sensitive context redaction, encryption at rest, and correlation with request and console execution identifiers. |
+| Console command monitoring | Execution records, results, timings, failure reporting, notifications, and heartbeat tracking. |
+| Scheduler lock diagnostics | Read-only lock inspection and guarded release of orphaned locks with checks against active/newer executions. |
+| API response debugging | Configurable debug details with separate sensitive-data sanitization controls. |
+
+### Sensitive-data handling
+
+`SensitiveDataSanitizer` provides centralized, recursive redaction of configured sensitive fields in arrays, JSON, form-encoded content, HTTP headers, and URL query parameters. Audit payloads with unsupported or unstructured formats are omitted rather than stored verbatim. Redaction occurs **before** sensitive audit content is encrypted and persisted.
+
+The relevant settings are under `engineering.sensitive_data` in `application/config/engineering.php`:
+
+- `enabled` (`SANITIZE_SENSITIVE_DATA`): controls general sanitization outside production.
+- `sanitize_api_debug_information` (`SANITIZE_API_DEBUG_INFORMATION`): independently controls sanitization of API debug output outside production.
+- `fields`: configured sensitive field names, matched case-insensitively.
+
+Both switches default to enabled. **Production enforces sanitization even when a switch is disabled.** The configuration is intended for development and testing; do not disable sanitization when processing real credentials.
+
+### Automated tests
+
+Run the complete suite with:
+
+```bash
+./dev test
+```
+
+The suite covers unit behavior, database persistence, OAuth2 authentication/authorization, real HTTP request/response auditing, sensitive-data handling, command execution, and scheduler-lock safeguards. At the latest verified run, **212 tests passed** using the SQLite test environment.
+
 ## Getting started
 
 ### Prerequisites
@@ -285,4 +321,6 @@ As implementations are added, their architecture, tests, and documentation shoul
 
 ## Status
 
-**Infrastructure configured and validated.** Laravel Passport Client Credentials and administrator Authorization Code + PKCE flows have been implemented and manually verified. Additional engineering features, automated tests, and documentation are being developed incrementally.
+**Active engineering lab.** Docker infrastructure, Passport authentication and authorization, observability/auditing, sensitive-data controls, console execution monitoring, and scheduler-lock diagnostics are implemented and covered by automated tests.
+
+**Planned, not yet implemented:** HTTP API consumers, feature flags, idempotency, caching strategies, and rate limiting (including a design inspired by prior order-management work). Future additions will be scoped as independent, tested engineering exercises.

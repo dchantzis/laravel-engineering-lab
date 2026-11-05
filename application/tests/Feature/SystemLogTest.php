@@ -31,7 +31,7 @@ class SystemLogTest extends TestCase
         $this->logDirectory = sys_get_temp_dir().'/system-log-tests-'.Str::uuid();
         File::makeDirectory($this->logDirectory, 0700, true);
         config()->set('database.connections.'.DatabaseConnection::APPLICATION.'.encryption_key', base64_encode(str_repeat('a', 32)));
-        config()->set('engineering.system_logs.sanitize_sensitive_data', true);
+        config()->set('engineering.sensitive_data.enabled', true);
         config()->set('logging.default', 'stack');
         config()->set('logging.channels.stack.channels', ['single', 'database']);
         config()->set('logging.channels.fallback.channels', ['single']);
@@ -121,7 +121,7 @@ class SystemLogTest extends TestCase
 
     public function test_disabling_sanitization_preserves_context_and_placeholder_values(): void
     {
-        config()->set('engineering.system_logs.sanitize_sensitive_data', false);
+        config()->set('engineering.sensitive_data.enabled', false);
 
         Log::channel('database')->info('Password {password}', ['password' => 'synthetic-only-value']);
 
@@ -170,7 +170,7 @@ class SystemLogTest extends TestCase
 
     public function test_direct_service_preserves_context_when_sanitization_is_disabled(): void
     {
-        config()->set('engineering.system_logs.sanitize_sensitive_data', false);
+        config()->set('engineering.sensitive_data.enabled', false);
 
         $stored = LogSystem::system()->add('Unmodified {password}', Level::Info, [
             'password' => 'synthetic-password',

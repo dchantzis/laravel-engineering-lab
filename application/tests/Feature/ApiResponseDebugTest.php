@@ -44,7 +44,7 @@ class ApiResponseDebugTest extends TestCase
         config()->set('app.env', $environment);
         config()->set('app.debug', false);
         config()->set('app.debug_queries', false);
-        config()->set('engineering.sanitise_sensitive_data_in_admin_responses', $sanitise);
+        config()->set('engineering.sensitive_data.sanitize_api_debug_information', $sanitise);
         $this->actingAs(User::factory()->make(['is_admin' => true]), 'api');
 
         $body = ['password' => 'body-secret', 'nested' => ['PRIVATE_NOTE' => 'nested-secret', 'name' => 'visible']];
@@ -85,7 +85,7 @@ class ApiResponseDebugTest extends TestCase
     public function test_sanitised_production_debug_can_still_expose_exception_messages_and_sql_literals(): void
     {
         config()->set('app.env', 'production');
-        config()->set('engineering.sanitise_sensitive_data_in_admin_responses', true);
+        config()->set('engineering.sensitive_data.sanitize_api_debug_information', true);
         $this->actingAs(User::factory()->make(['is_admin' => true]), 'api');
 
         $exceptionResponse = $this->postJson('/api/debug-response-test/query')->assertOk();
@@ -101,7 +101,7 @@ class ApiResponseDebugTest extends TestCase
         config()->set('app.env', $environment);
         config()->set('app.debug', $debug);
         config()->set('app.debug_queries', $debugQueries);
-        config()->set('engineering.sanitise_sensitive_data_in_admin_responses', true);
+        config()->set('engineering.sensitive_data.sanitize_api_debug_information', true);
         $this->actingAs(User::factory()->make(['is_admin' => false]), 'api');
 
         $response = $this->postJson('/api/debug-response-test/normal', ['password' => 'body-secret'])->assertOk();

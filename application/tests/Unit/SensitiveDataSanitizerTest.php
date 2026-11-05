@@ -109,12 +109,12 @@ class SensitiveDataSanitizerTest extends TestCase
         if (isEnvironmentProduction()) {
             $this->assertSame(
                 ['password' => '********'],
-                $this->sanitizer->sanitizeIfEnabled($data)
+                $this->sanitizer->sanitize($data)
             );
         } else {
             $this->assertSame(
                 $data,
-                $this->sanitizer->sanitizeIfEnabled($data)
+                $this->sanitizer->sanitize($data)
             );
         }
     }
@@ -175,7 +175,7 @@ class SensitiveDataSanitizerTest extends TestCase
                 'username' => 'john',
                 'password' => '********',
             ],
-            $this->sanitizer->sanitizeAuditContent($content)
+            $this->sanitizer->sanitizeContent($content)
         );
     }
 
@@ -186,7 +186,41 @@ class SensitiveDataSanitizerTest extends TestCase
 
         $this->assertSame(
             '[Content omitted: unsupported or unstructured format]',
-            $this->sanitizer->sanitizeAuditContent($content)
+            $this->sanitizer->sanitizeContent($content)
+        );
+    }
+
+    #[Test]
+    public function it_forces_sanitization_when_disabled(): void
+    {
+        config()->set('engineering.sensitive_data.enabled', false);
+
+        $data = ['password' => 'secret123'];
+
+        $this->assertSame(
+            ['password' => '********'],
+            $this->sanitizer->sanitize($data, force: true)
+        );
+    }
+
+    #[Test]
+    public function it_omits_data_exceeding_maximum_recursion_depth(): void
+    {
+        $data = ['password' => 'secret123'];
+
+        for ($i = 0; $i < 12; $i++) {
+            $data = ['nested' => $data];
+        }
+
+        $result = $this->sanitizer->sanitize($data);
+
+        for ($i = 0; $i < 10; $i++) {
+            $result = $result['nested'];
+        }
+
+        $this->assertSame(
+            '[Content omitted: maximum depth exceeded]',
+            $result
         );
     }
 }

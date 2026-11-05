@@ -413,13 +413,18 @@ if (! function_exists('sanitizeSensitiveData')) {
                 if (str_contains($value, '=')) {
                     return $sanitizer->sanitizeFormData(
                         $value,
-                        $ignoredFields
+                        $ignoredFields,
+                        force: true
                     );
                 }
             }
         }
 
-        return $sanitizer->sanitize($value, $ignoredFields);
+        return $sanitizer->sanitize(
+            $value,
+            $ignoredFields,
+            force: true
+        );
     }
 }
 

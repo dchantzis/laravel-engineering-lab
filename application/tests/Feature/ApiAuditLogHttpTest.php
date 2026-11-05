@@ -167,4 +167,37 @@ class ApiAuditLogHttpTest extends TestCase
 
         return $token;
     }
+
+    public function test_authenticated_request_redacts_sensitive_audit_data(): void
+    {
+        $client = Client::factory()->asClientCredentials()->create();
+        $token = $this->issueClientToken($client);
+
+        $this->withToken($token)
+            ->getJson('/api/test?password=secret123&marker=audit-test')
+            ->assertOk();
+
+        $request = ApiAuditLog::where(
+            'type',
+            ApiAuditLogType::REQUEST->value
+        )->sole();
+
+        $this->assertSame(
+            '********',
+            $request->content->password
+        );
+        $this->assertSame(
+            '********',
+            $request->meta->parameters->password
+        );
+        $this->assertSame(
+            '********',
+            $request->meta->headers->authorization
+        );
+
+        $this->assertStringNotContainsString(
+            'secret123',
+            $request->resource
+        );
+    }
 }
