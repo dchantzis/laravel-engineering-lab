@@ -1,7 +1,7 @@
 <?php
 
 use App\Enums\Environment;
-use App\Http\Middleware\PersistOauthClientId;
+use App\Services\OauthClientResolver;
 use App\Models\User;
 use Carbon\Carbon;
 use Carbon\Constants\Format;
@@ -217,31 +217,52 @@ if (!function_exists('constructQueryWithBindings'))
 
 if (! function_exists('getOauthClientId')) {
     /**
-     * @throws AuthenticationException
+     * @param Request $request
+     * @return string
+     * @throws \Illuminate\Contracts\Container\BindingResolutionException
+     * @throws \Illuminate\Contracts\Container\CircularDependencyException
+     * @throws \Laravel\Passport\Exceptions\AuthenticationException
      */
     function getOauthClientId(Request $request): string
     {
-        if ($oauthClientId = $request->attributes->get(PersistOauthClientId::OAUTH_CLIENT_ID_SLUG)) {
-            return $oauthClientId;
-        }
+        return app(OauthClientResolver::class)->resolve($request);
+    }
+}
 
+if (! function_exists('getOauthClientId')) {
+    /**
+     * Extract a client ID by looking up the token's unverified jti.
+     *
+     * @param Request $request
+     * @return string
+     * @throws AuthenticationException
+     */
+    function getOauthClientIdFromBearerToken(Request $request): string
+    {
         if (! $request->bearerToken()) {
             throw new AuthenticationException;
         }
 
-        $oauthAccessTokenId = (new Parser(new JoseEncoder))
-            ->parse($request->bearerToken())
-            ->claims()
-            ->get('jti');
-
-        if (! $oauthAccessTokenId || ! Passport::token()->find($oauthAccessTokenId)) {
+        try {
+            $oauthAccessTokenId = (new Parser(new JoseEncoder))
+                ->parse($request->bearerToken())
+                ->claims()
+                ->get('jti');
+        } catch (Throwable) {
             throw new AuthenticationException;
         }
 
-        return Passport::token()
-            ->find($oauthAccessTokenId)
-            ->client
-            ->id;
+        if (! is_string($oauthAccessTokenId) || $oauthAccessTokenId === '') {
+            throw new AuthenticationException;
+        }
+
+        $token = Passport::token()->find($oauthAccessTokenId);
+
+        if (! $token || ! $token->client) {
+            throw new AuthenticationException;
+        }
+
+        return $token->client->id;
     }
 }
 
