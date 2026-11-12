@@ -15,6 +15,8 @@ abstract class PassportTestCase extends AuthTestCase
 
     protected const string VERIFIER = 'test-verifier-abcdefghijklmnopqrstuvwxyz-0123456789';
 
+    private bool $clientTokenKeysConfigured = false;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -113,5 +115,39 @@ abstract class PassportTestCase extends AuthTestCase
         $this->assertInstanceOf(UnencryptedToken::class, $parsed);
 
         return $parsed;
+    }
+
+    protected function issueClientToken(Client $client): string
+    {
+        if (! $this->clientTokenKeysConfigured) {
+            $key = openssl_pkey_new([
+                'private_key_bits' => 2048,
+                'private_key_type' => OPENSSL_KEYTYPE_RSA,
+            ]);
+
+            $this->assertNotFalse($key);
+            $this->assertTrue(openssl_pkey_export($key, $privateKey));
+
+            $details = openssl_pkey_get_details($key);
+            $this->assertIsArray($details);
+
+            config()->set('passport.private_key', $privateKey);
+            config()->set('passport.public_key', $details['key']);
+
+            $this->clientTokenKeysConfigured = true;
+        }
+
+        $tokenResponse = $this->postJson('/oauth/token', [
+            'grant_type' => 'client_credentials',
+            'client_id' => $client->id,
+            'client_secret' => $client->plainSecret,
+        ])->assertOk();
+
+        $token = $tokenResponse->json('access_token');
+
+        $this->assertIsString($token);
+        $this->assertNotSame('', $token);
+
+        return $token;
     }
 }

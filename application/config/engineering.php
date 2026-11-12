@@ -2,17 +2,6 @@
 
 return [
 
-    'rate_limit' => [
-        'api' => [
-            'enabled' => env('API_RATE_LIMIT_ENABLED', false),
-            'default' => (int) env('API_RATE_LIMIT_DEFAULT', 150),
-            'admin' => (int) env('API_RATE_LIMIT_ADMIN', 100),
-        ],
-        'web' => [
-            'default' => (int) env('WEB_RATE_LIMIT', 60),
-        ],
-    ],
-
     'sensitive_data' => [
         'enabled' => (bool) env('SANITIZE_SENSITIVE_DATA', true),
 

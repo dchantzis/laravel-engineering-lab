@@ -7,12 +7,14 @@ use App\Http\Middleware\IpTrace;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Middleware\EnsureOauthClientIsResourceOwner;
+use App\Enums\RateLimiterName;
 
 require __DIR__.'/api/health.php';
 
 Route::middleware([
     IpTrace::class,
     EnsureOauthClientIsResourceOwner::class,
+    'throttle:'.RateLimiterName::API_CLIENT_CREDENTIALS->value,
     GenerateApiRequestUuid::class,
     ApiAuditLog::class,
 ])->group(function () {
@@ -33,6 +35,7 @@ Route::prefix('admin')
     ->middleware([
         'auth:api',
         EnsureUserIsAdmin::class,
+        'throttle:'.RateLimiterName::API_ADMIN->value,
     ])
     ->group(function () {
 

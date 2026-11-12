@@ -1,5 +1,7 @@
 <?php
 
+use App\Enums\DatabaseConnection;
+
 return [
 
     /*
@@ -43,7 +45,7 @@ return [
     |
     */
 
-    'connection' => \App\Enums\DatabaseConnection::APPLICATION,
+    'connection' => DatabaseConnection::APPLICATION,
 
 //    'personal_access_client' => [
 //        'id' => env('PASSPORT_PERSONAL_ACCESS_CLIENT_ID'),
